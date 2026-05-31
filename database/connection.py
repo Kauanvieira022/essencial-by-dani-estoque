@@ -1,16 +1,14 @@
 import sqlite3
 import os
-import sys
 
 
 def get_database_path():
-    # ✅ Se estiver rodando como executável (.exe)
-    if getattr(sys, 'frozen', False):
-        base_dir = os.path.dirname(sys.executable)
-    else:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+    # ✅ Pasta padrão do usuário
+    base_dir = os.path.join(os.environ["LOCALAPPDATA"], "ControleEstoque")
 
-    # ✅ Caminho do banco
+    # ✅ Cria a pasta se não existir
+    os.makedirs(base_dir, exist_ok=True)
+
     return os.path.join(base_dir, "estoque.db")
 
 
