@@ -33,6 +33,7 @@ class ProdutosView(ctk.CTkFrame):
         super().__init__(master, fg_color=CINZA_BG)
 
         self.produtos = []
+        self.produto_id_edicao = None
 
         self.criar_widgets()
         self.carregar_produtos()
@@ -196,6 +197,7 @@ class ProdutosView(ctk.CTkFrame):
             self.tree.heading(col, text=col)
 
         self.tree.pack(fill="both", expand=True, padx=25, pady=15)
+        self.tree.bind("<<TreeviewSelect>>", self.carregar_produto_selecionado)
 
     # ✅ FUNÇÕES
 
@@ -203,6 +205,14 @@ class ProdutosView(ctk.CTkFrame):
         exportar_produtos_excel(self.produtos)
 
     def salvar_produto(self):
+        if self.produto_id_edicao is not None:
+            messagebox.showwarning(
+                "Aviso",
+                "Você está editando um produto. Use o botão Editar ou "
+                "clique em Todos para cancelar."
+            )
+            return
+
         try:
             produto = Produto(
                 nome=self.nome_entry.get(),
@@ -213,22 +223,103 @@ class ProdutosView(ctk.CTkFrame):
                 estoque_minimo=int(self.estoque_minimo_entry.get())
             )
             cadastrar_produto(produto)
+            messagebox.showinfo("Sucesso", "Produto cadastrado com sucesso!")
+            self.limpar_campos()
             self.carregar_produtos()
         except Exception as erro:
             messagebox.showerror("Erro", str(erro))
 
     def editar_produto(self):
-        pass
+        if self.produto_id_edicao is None:
+            messagebox.showwarning(
+                "Aviso",
+                "Selecione um produto na tabela para editar."
+            )
+            return
+
+        try:
+            atualizar_produto(
+                self.produto_id_edicao,
+                self.nome_entry.get(),
+                self.categoria_entry.get(),
+                self.fornecedor_entry.get(),
+                self.preco_entry.get(),
+                self.estoque_minimo_entry.get()
+            )
+            messagebox.showinfo("Sucesso", "Produto atualizado com sucesso!")
+            self.limpar_campos()
+            self.carregar_produtos()
+        except Exception as erro:
+            messagebox.showerror("Erro", str(erro))
 
     def excluir_produto(self):
         sel = self.tree.selection()
         if not sel:
+            messagebox.showwarning(
+                "Aviso",
+                "Selecione um produto na tabela para excluir."
+            )
             return
 
-        excluir_produto(self.tree.item(sel)["values"][0])
-        self.carregar_produtos()
+        valores = self.tree.item(sel[0])["values"]
+        confirmar = messagebox.askyesno(
+            "Confirmar exclusão",
+            f"Deseja realmente excluir o produto “{valores[1]}”?"
+        )
+        if not confirmar:
+            return
+
+        try:
+            excluir_produto(valores[0])
+            self.limpar_campos()
+            self.carregar_produtos()
+            messagebox.showinfo("Sucesso", "Produto excluído com sucesso!")
+        except Exception as erro:
+            messagebox.showerror("Erro", str(erro))
+
+    def carregar_produto_selecionado(self, event=None):
+        selecao = self.tree.selection()
+        if not selecao:
+            return
+
+        id_produto = self.tree.item(selecao[0])["values"][0]
+        produto = next(
+            (p for p in self.produtos if p["id"] == id_produto),
+            None
+        )
+        if produto is None:
+            return
+
+        self.produto_id_edicao = id_produto
+        self.quantidade_entry.configure(state="normal")
+        campos = (
+            (self.nome_entry, produto["nome"]),
+            (self.categoria_entry, produto["categoria"]),
+            (self.fornecedor_entry, produto["fornecedor"]),
+            (self.preco_entry, produto["preco"]),
+            (self.quantidade_entry, produto["quantidade"]),
+            (self.estoque_minimo_entry, produto["estoque_minimo"])
+        )
+        for campo, valor in campos:
+            campo.delete(0, "end")
+            campo.insert(0, "" if valor is None else str(valor))
+        self.quantidade_entry.configure(state="disabled")
+
+    def limpar_campos(self):
+        self.produto_id_edicao = None
+        self.quantidade_entry.configure(state="normal")
+        for campo in (
+            self.nome_entry,
+            self.categoria_entry,
+            self.fornecedor_entry,
+            self.preco_entry,
+            self.quantidade_entry,
+            self.estoque_minimo_entry
+        ):
+            campo.delete(0, "end")
 
     def carregar_produtos(self):
+        self.limpar_campos()
         self.produtos = listar_produtos()
         self.preencher_tabela(self.produtos)
         self.atualizar_alerta()
@@ -247,9 +338,9 @@ class ProdutosView(ctk.CTkFrame):
 
         filtrados = [
             p for p in self.produtos
-            if termo in p["nome"].lower()
-            or termo in p["categoria"].lower()
-            or termo in p["fornecedor"].lower()
+            if termo in (p["nome"] or "").lower()
+            or termo in (p["categoria"] or "").lower()
+            or termo in (p["fornecedor"] or "").lower()
         ]
 
         self.preencher_tabela(filtrados)

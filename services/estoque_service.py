@@ -1,33 +1,40 @@
 from database.connection import get_connection
 
 
-def registrar_entrada_estoque(id_produto, quantidade, observacao=""):
-
-    conn = get_connection()
-    cursor = conn.cursor()
+def _quantidade_positiva(valor):
+    if isinstance(valor, bool):
+        raise ValueError("Quantidade inválida.")
 
     try:
-        cursor.execute("""
-            SELECT *
-            FROM produtos
-            WHERE id = ?
-        """, (id_produto,))
+        quantidade = int(valor)
+    except (TypeError, ValueError) as erro:
+        raise ValueError("Quantidade deve ser um número inteiro.") from erro
 
-        produto = cursor.fetchone()
+    if quantidade <= 0:
+        raise ValueError("A quantidade deve ser maior que zero.")
+    return quantidade
 
-        if produto is None:
-            raise Exception("Produto não encontrado.")
 
-        cursor.execute("""
+def _observacao(valor):
+    return "" if valor is None else str(valor).strip()
+
+
+def registrar_entrada_estoque(id_produto, quantidade, observacao=""):
+    quantidade = _quantidade_positiva(quantidade)
+    observacao = _observacao(observacao)
+
+    conn = get_connection()
+    try:
+        cursor = conn.execute("""
             UPDATE produtos
             SET quantidade = quantidade + ?
             WHERE id = ?
-        """, (
-            quantidade,
-            id_produto
-        ))
+        """, (quantidade, id_produto))
 
-        cursor.execute("""
+        if cursor.rowcount == 0:
+            raise ValueError("Produto não encontrado.")
+
+        conn.execute("""
             INSERT INTO movimentacoes (
                 produto_id,
                 tipo,
@@ -41,51 +48,44 @@ def registrar_entrada_estoque(id_produto, quantidade, observacao=""):
             quantidade,
             observacao
         ))
-
         conn.commit()
-
-    except Exception as erro:
+    except Exception:
         conn.rollback()
-        raise erro
-
+        raise
     finally:
         conn.close()
 
 
 def registrar_saida_estoque(id_produto, quantidade, observacao=""):
+    quantidade = _quantidade_positiva(quantidade)
+    observacao = _observacao(observacao)
 
     conn = get_connection()
-    cursor = conn.cursor()
-
     try:
-        cursor.execute("""
-            SELECT *
-            FROM produtos
-            WHERE id = ?
-        """, (id_produto,))
+        cursor = conn.execute("""
+            UPDATE produtos
+            SET quantidade = quantidade - ?
+            WHERE id = ? AND quantidade >= ?
+        """, (
+            quantidade,
+            id_produto,
+            quantidade
+        ))
 
-        produto = cursor.fetchone()
+        if cursor.rowcount == 0:
+            produto = conn.execute("""
+                SELECT quantidade
+                FROM produtos
+                WHERE id = ?
+            """, (id_produto,)).fetchone()
 
-        if produto is None:
-            raise Exception("Produto não encontrado.")
-
-        quantidade_atual = produto["quantidade"]
-
-        if quantidade > quantidade_atual:
-            raise Exception(
+            if produto is None:
+                raise ValueError("Produto não encontrado.")
+            raise ValueError(
                 "Quantidade de saída maior que o estoque disponível."
             )
 
-        cursor.execute("""
-            UPDATE produtos
-            SET quantidade = quantidade - ?
-            WHERE id = ?
-        """, (
-            quantidade,
-            id_produto
-        ))
-
-        cursor.execute("""
+        conn.execute("""
             INSERT INTO movimentacoes (
                 produto_id,
                 tipo,
@@ -99,38 +99,31 @@ def registrar_saida_estoque(id_produto, quantidade, observacao=""):
             quantidade,
             observacao
         ))
-
         conn.commit()
-
-    except Exception as erro:
+    except Exception:
         conn.rollback()
-        raise erro
-
+        raise
     finally:
         conn.close()
 
 
 def listar_movimentacoes():
-
     conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT
-            movimentacoes.id,
-            produtos.nome AS produto,
-            movimentacoes.tipo,
-            movimentacoes.quantidade,
-            movimentacoes.observacao,
-            movimentacoes.data_movimentacao
-        FROM movimentacoes
-        INNER JOIN produtos
-            ON produtos.id = movimentacoes.produto_id
-        ORDER BY movimentacoes.data_movimentacao DESC
-    """)
-
-    movimentacoes = cursor.fetchall()
-
-    conn.close()
-
-    return movimentacoes
+    try:
+        return conn.execute("""
+            SELECT
+                movimentacoes.id,
+                movimentacoes.produto_id,
+                COALESCE(produtos.nome, 'Produto removido') AS produto,
+                movimentacoes.tipo,
+                movimentacoes.quantidade,
+                movimentacoes.observacao,
+                movimentacoes.data_movimentacao
+            FROM movimentacoes
+            LEFT JOIN produtos
+                ON produtos.id = movimentacoes.produto_id
+            ORDER BY movimentacoes.data_movimentacao DESC,
+                     movimentacoes.id DESC
+        """).fetchall()
+    finally:
+        conn.close()
