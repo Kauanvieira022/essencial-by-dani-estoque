@@ -70,19 +70,36 @@ C:\Users\SEU_USUARIO\AppData\Local\ControleEstoque\estoque.db
 
 🧑‍💻 Execução em Desenvolvimento
 
-Instalar dependências:
+Criar e ativar um ambiente virtual:
 
-pip install customtkinter matplotlib
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
 
 Rodar o sistema:
 
+```powershell
 python main.py
+```
+
+Executar os testes:
+
+```powershell
+python -m unittest discover -s tests -v
+```
 
 ---
 
 📦 Gerar Executável (.exe)
 
-python -m PyInstaller --onefile --windowed main.py
+Instale as dependências de desenvolvimento e gere o executável:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m PyInstaller main.spec
+```
 
 O executável será gerado em:
 

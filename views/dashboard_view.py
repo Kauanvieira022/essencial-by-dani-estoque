@@ -9,8 +9,8 @@ from services.produto_service import (
 
 from services.estoque_service import listar_movimentacoes
 
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 
 # Paleta
@@ -116,8 +116,7 @@ class DashboardView(ctk.CTkFrame):
         estoque_baixo = listar_estoque_baixo()
         movimentacoes = listar_movimentacoes()
 
-        # ✅ MAPA POR NOME (CORRIGIDO)
-        produtos_dict = {p["nome"]: p for p in produtos}
+        produtos_dict = {p["id"]: p for p in produtos}
 
         categorias = {}
         entradas = 0
@@ -138,12 +137,12 @@ class DashboardView(ctk.CTkFrame):
             if filtro != "Todos" and mes_ano != filtro:
                 continue
 
-            produto = produtos_dict.get(m["produto"])
+            produto = produtos_dict.get(m["produto_id"])
 
             if not produto:
                 continue
 
-            categoria = produto["categoria"]
+            categoria = produto["categoria"] or "Sem categoria"
             quantidade = m["quantidade"]
 
             if categoria not in categorias:
@@ -171,7 +170,8 @@ class DashboardView(ctk.CTkFrame):
         for widget in self.grafico_frame.winfo_children():
             widget.destroy()
 
-        fig, ax = plt.subplots(figsize=(5, 5))
+        fig = Figure(figsize=(5, 5))
+        ax = fig.add_subplot(111)
 
         labels = list(categorias.keys())
         valores = list(categorias.values())
